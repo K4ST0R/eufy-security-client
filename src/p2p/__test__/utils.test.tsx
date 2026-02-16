@@ -35,8 +35,11 @@ import {
     MAGIC_WORD,
     generateBasicLockAESKey,
     eufyKDF,
+    decryptP2PKeyECDH,
+    getLockV12Key,
 } from "../utils";
 import { VideoCodec } from "../types";
+import { createECDH } from "crypto";
 
 jest.mock("../../logging", () => ({
     rootP2PLogger: { error: jest.fn(), debug: jest.fn(), info: jest.fn() },
@@ -635,6 +638,59 @@ describe("p2p/utils", () => {
             const result = readNullTerminatedBuffer(input);
             input[0] = 0x00;
             expect(result[0]).toBe(0x41);
+        });
+    });
+
+    describe("decryptP2PKeyECDH", () => {
+        const device = createECDH("prime256v1");
+        device.generateKeys();
+        const eccPrivateKey = device.getPrivateKey("hex");
+
+        it("should decrypt with compressed pubkey only", () => {
+            const peer = createECDH("prime256v1");
+            peer.generateKeys();
+
+            const result = decryptP2PKeyECDH(Buffer.from(peer.getPublicKey("hex", "compressed"), "hex"), eccPrivateKey);
+            expect(result).toEqual(device.computeSecret(peer.getPublicKey()).subarray(0, 16));
+        });
+
+        it("should decrypt with uncompressed pubkey only", () => {
+            const peer = createECDH("prime256v1");
+            peer.generateKeys();
+
+            const result = decryptP2PKeyECDH(peer.getPublicKey(), eccPrivateKey);
+            expect(result).toEqual(device.computeSecret(peer.getPublicKey()).subarray(0, 16));
+        });
+
+        it("should decrypt ECIES envelope", () => {
+            const sessionKey = "0123456789abcdef0123456789abcdef";
+            const envelope = Buffer.from(getLockV12Key(sessionKey, device.getPublicKey("hex").substring(2)), "hex");
+
+            expect(decryptP2PKeyECDH(envelope, eccPrivateKey)).toEqual(Buffer.from(sessionKey, "hex"));
+        });
+
+        it("should decrypt 48-byte ECIES payload", () => {
+            const plaintext = Buffer.alloc(48, 0xab).toString("hex");
+            const envelope = Buffer.from(getLockV12Key(plaintext, device.getPublicKey("hex").substring(2)), "hex");
+
+            expect(decryptP2PKeyECDH(envelope, eccPrivateKey)).toEqual(Buffer.from(plaintext, "hex").subarray(0, 16));
+        });
+
+        it("should always return 16 bytes", () => {
+            const peer = createECDH("prime256v1");
+            peer.generateKeys();
+
+            const result = decryptP2PKeyECDH(Buffer.from(peer.getPublicKey("hex", "compressed"), "hex"), eccPrivateKey);
+            expect(Buffer.isBuffer(result)).toBe(true);
+            expect(result.length).toBe(16);
+        });
+
+        it("should produce deterministic output", () => {
+            const peer = createECDH("prime256v1");
+            peer.generateKeys();
+            const pub = Buffer.from(peer.getPublicKey("hex", "compressed"), "hex");
+
+            expect(decryptP2PKeyECDH(pub, eccPrivateKey)).toEqual(decryptP2PKeyECDH(pub, eccPrivateKey));
         });
     });
 });
