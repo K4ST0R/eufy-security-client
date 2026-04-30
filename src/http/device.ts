@@ -1601,6 +1601,8 @@ export class Device extends TypedEmitter<DeviceEvents> {
         return "T8510P";
       } else if (property.name === PropertyName.Model && this.isLockWifiT85V0()) {
         return "T85V0";
+      } else if (property.name === PropertyName.Model && this.isLockWifiT85P0()) {
+        return "T85P0";
       } else if (property.type === "number") {
         const numericProperty = property as PropertyMetadataNumeric;
         try {
@@ -1971,6 +1973,7 @@ export class Device extends TypedEmitter<DeviceEvents> {
       type == DeviceType.LOCK_85V0 ||
       type == DeviceType.LOCK_8502 ||
       type == DeviceType.LOCK_85L0 ||
+      type == DeviceType.LOCK_85P0 ||
       type == DeviceType.SMART_SAFE_7400 ||
       type == DeviceType.SMART_SAFE_7401 ||
       type == DeviceType.SMART_SAFE_7402 ||
@@ -2185,7 +2188,8 @@ export class Device extends TypedEmitter<DeviceEvents> {
       Device.isLockWifiT8502(type) ||
       Device.isLockWifiT85L0(type) ||
       Device.isLockWifiT8531(type) ||
-      Device.isLockWifiT85D0(type)
+      Device.isLockWifiT85D0(type) ||
+      Device.isLockWifiT85P0(type)
     );
   }
 
@@ -2220,6 +2224,11 @@ export class Device extends TypedEmitter<DeviceEvents> {
 
   static isLockWifiT85D0(type: number): boolean {
     return DeviceType.LOCK_85D0 == type;
+  }
+
+  static isLockWifiT85P0(type: number): boolean {
+    //T85P0
+    return DeviceType.LOCK_85P0 == type;
   }
 
   static isLockWifiR10(type: number): boolean {
@@ -2567,6 +2576,7 @@ export class Device extends TypedEmitter<DeviceEvents> {
       sn.startsWith("T8510") ||
       sn.startsWith("T8520") ||
       sn.startsWith("T85V0") ||
+      sn.startsWith("T85P0") ||
       sn.startsWith("T8500") ||
       sn.startsWith("T8501") ||
       sn.startsWith("T8503") ||
@@ -2752,6 +2762,10 @@ export class Device extends TypedEmitter<DeviceEvents> {
 
   public isLockWifiT85L0(): boolean {
     return Device.isLockWifiT85L0(this.rawDevice.device_type);
+  }
+
+  public isLockWifiT85P0(): boolean {
+    return Device.isLockWifiT85P0(this.rawDevice.device_type);
   }
 
   public isBatteryDoorbell1(): boolean {

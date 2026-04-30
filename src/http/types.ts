@@ -101,6 +101,7 @@ export enum DeviceType {
   LOCK_85D0 = 202,
   LOCK_85L0 = 201,
   LOCK_85V0 = 203,
+  LOCK_85P0 = 209, //T85P0
   CAMERA_POE_S4 = 301, //T8E00
   WALL_LIGHT_CAM_81A0 = 10005,
   INDOOR_PT_CAMERA_C220 = 10008, // T8W11C
@@ -1062,6 +1063,7 @@ export const GenericTypeProperty: PropertyMetadataNumeric = {
     201: "Smart Lock C33 (T85L0)",
     202: "Smart Lock C30 (T85D0)",
     203: "FamiLock S3 (T85V0)",
+    209: "FamiLock E34 (T85P0)",
     301: "PoE Bullet-PTZ Cam S4 (T8E00)",
     10005: "Solar Wall Light Cam S120 (T81A0)",
     10008: "Indoor Cam C220 (T8W11C)",
@@ -8089,6 +8091,29 @@ export const DeviceProperties: Properties = {
     [PropertyName.DevicePersonName]: DevicePersonNameProperty,
   },
   [DeviceType.LOCK_85V0]: LockT85V0DeviceProperties,
+  [DeviceType.LOCK_85P0]: {
+    ...GenericDeviceProperties,
+    [PropertyName.DeviceBattery]: DeviceBatteryLockProperty,
+    [PropertyName.DeviceLocked]: DeviceLockedProperty,
+    [PropertyName.DeviceLockStatus]: DeviceAdvancedLockStatusProperty,
+    [PropertyName.DeviceAutoLock]: DeviceAutoLockProperty,
+    [PropertyName.DeviceAutoLockTimer]: DeviceAutoLockTimerProperty,
+    [PropertyName.DeviceAutoLockSchedule]: DeviceAutoLockScheduleProperty,
+    [PropertyName.DeviceAutoLockScheduleStartTime]: DeviceAutoLockScheduleStartTimeProperty,
+    [PropertyName.DeviceAutoLockScheduleEndTime]: DeviceAutoLockScheduleEndTimeProperty,
+    [PropertyName.DeviceOneTouchLocking]: DeviceOneTouchLockingProperty,
+    [PropertyName.DeviceWrongTryProtection]: DeviceWrongTryProtectionProperty,
+    [PropertyName.DeviceWrongTryAttempts]: DeviceWrongTryAttemptsProperty,
+    [PropertyName.DeviceWrongTryLockdownTime]: DeviceWrongTryLockdownTimeProperty,
+    [PropertyName.DeviceScramblePasscode]: DeviceScramblePasscodeProperty,
+    [PropertyName.DeviceSound]: DeviceSoundProperty,
+    [PropertyName.DeviceNotification]: DeviceNotificationSmartLockProperty,
+    [PropertyName.DeviceNotificationUnlocked]: DeviceNotificationUnlockedSmartLockProperty,
+    [PropertyName.DeviceNotificationLocked]: DeviceNotificationLockedSmartLockProperty,
+    [PropertyName.DeviceLowBatteryAlert]: DeviceLowBatteryAlertProperty,
+    [PropertyName.DeviceLockEventOrigin]: DeviceLockEventOriginProperty,
+    [PropertyName.DevicePersonName]: DevicePersonNameProperty,
+  },
   [DeviceType.LOCK_BLE]: {
     ...GenericDeviceProperties,
     [PropertyName.DeviceState]: DeviceStateLockProperty,
@@ -9908,6 +9933,9 @@ export const StationProperties: Properties = {
   [DeviceType.LOCK_8592]: {
     ...BaseStationProperties,
   },
+  [DeviceType.LOCK_85P0]: {
+    ...BaseStationProperties,
+  },
   [DeviceType.LOCK_BLE]: {
     ...BaseStationProperties,
   },
@@ -10721,6 +10749,7 @@ export const DeviceCommands: Commands = {
     CommandName.DeviceUpdateUserSchedule,
     CommandName.DeviceUpdateUsername,
   ],
+  [DeviceType.LOCK_85P0]: [CommandName.DeviceLockCalibration],
   [DeviceType.MOTION_SENSOR]: [],
   [DeviceType.SENSOR]: [],
   [DeviceType.SMART_SAFE_7400]: [CommandName.DeviceUnlock, CommandName.DeviceVerifyPIN],
