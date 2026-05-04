@@ -1365,7 +1365,12 @@ export const DeviceEnabledIndoorMiniProperty: PropertyMetadataBoolean = {
 
 export const DeviceEnabledIndoorS350Property: PropertyMetadataBoolean = {
   ...DeviceEnabledSoloProperty,
-  key: CommandType.CMD_DEVS_SWITCH,
+  // The HomeBase 3 keeps the live cam-enabled state under the wrapped
+  // CMD_INDOOR_ENABLE_PRIVACY_MODE_S350 (6250) param. The legacy
+  // CMD_DEVS_SWITCH (1035) only ever reflects raw bridge-side writes
+  // and goes stale forever for cams that exclusively use the wrapped
+  // path (S350, outdoor PT cams etc.).
+  key: CommandType.CMD_INDOOR_ENABLE_PRIVACY_MODE_S350,
   commandId: CommandType.CMD_INDOOR_ENABLE_PRIVACY_MODE_S350,
 };
 

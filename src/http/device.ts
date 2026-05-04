@@ -31,6 +31,7 @@ import {
   DeviceDetectionStatisticsWorkingDaysProperty,
   DeviceDetectionStatisticsDetectedEventsProperty,
   DeviceDetectionStatisticsRecordedEventsProperty,
+  DeviceEnabledIndoorS350Property,
   DeviceEnabledSoloProperty,
   FloodlightT8420XDeviceProperties,
   WiredDoorbellT8200XDeviceProperties,
@@ -354,7 +355,8 @@ export class Device extends TypedEmitter<DeviceEvents> {
       if (
         property.key === ParamType.PRIVATE_MODE ||
         property.key === ParamType.OPEN_DEVICE ||
-        property.key === CommandType.CMD_DEVS_SWITCH
+        property.key === CommandType.CMD_DEVS_SWITCH ||
+        property.key === CommandType.CMD_INDOOR_ENABLE_PRIVACY_MODE_S350
       ) {
         if (
           (this.isIndoorCamera() && !this.isIndoorPanAndTiltCameraS350()) ||
@@ -1802,7 +1804,15 @@ export class Device extends TypedEmitter<DeviceEvents> {
 
       if (!this.isSmartDrop()) {
         //TODO: Check with future devices if this property overriding is correct (for example with indoor cameras etc.)
-        newMetadata[PropertyName.DeviceEnabled] = DeviceEnabledSoloProperty;
+        // Outdoor pan/tilt cams (eufyCam S4 etc.) report enabled state
+        // through the wrapped CMD_INDOOR_ENABLE_PRIVACY_MODE_S350 (6250)
+        // param. Binding them to DeviceEnabledSoloProperty (key=1035) here
+        // would re-anchor the read on a value the cam never updates again.
+        if (this.isOutdoorPanAndTiltCamera()) {
+          newMetadata[PropertyName.DeviceEnabled] = DeviceEnabledIndoorS350Property;
+        } else {
+          newMetadata[PropertyName.DeviceEnabled] = DeviceEnabledSoloProperty;
+        }
       }
 
       metadata = newMetadata;
