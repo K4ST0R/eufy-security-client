@@ -102,6 +102,7 @@ export enum DeviceType {
   LOCK_85L0 = 201,
   LOCK_85V0 = 203,
   LOCK_85P0 = 209, //T85P0
+  NVR_S4_MAX = 300, //T8N00
   CAMERA_POE_S4 = 301, //T8E00
   WALL_LIGHT_CAM_81A0 = 10005,
   INDOOR_PT_CAMERA_C220 = 10008, // T8W11C
@@ -1067,6 +1068,7 @@ export const GenericTypeProperty: PropertyMetadataNumeric = {
     202: "Smart Lock C30 (T85D0)",
     203: "FamiLock S3 (T85V0)",
     209: "FamiLock E34 (T85P0)",
+    300: "NVR S4 Max (T8N00)",
     301: "PoE Bullet-PTZ Cam S4 (T8E00)",
     10005: "Solar Wall Light Cam S120 (T81A0)",
     10008: "Indoor Cam C220 (T8W11C)",
@@ -8766,7 +8768,9 @@ export const DeviceProperties: Properties = {
     [PropertyName.DeviceState]: DeviceStateProperty,
     [PropertyName.DeviceMotionDetected]: DeviceMotionDetectedProperty,
     [PropertyName.DevicePersonDetected]: DevicePersonDetectedProperty,
+    [PropertyName.DevicePersonName]: DevicePersonNameProperty,
     [PropertyName.DeviceVehicleDetected]: DeviceVehicleDetectedProperty,
+    [PropertyName.DeviceStrangerPersonDetected]: DeviceStrangerPersonDetectedProperty,
     [PropertyName.DeviceStatusLed]: DeviceStatusLedProperty,
     [PropertyName.DeviceLight]: DeviceFloodlightLightProperty,
     [PropertyName.DeviceLightSettingsBrightnessManual]: DeviceFloodlightLightSettingsBrightnessManualProperty,
@@ -8813,6 +8817,9 @@ export const DeviceProperties: Properties = {
     [PropertyName.DeviceDetectionStatisticsWorkingDays]: DeviceDetectionStatisticsWorkingDaysProperty,
     [PropertyName.DeviceDetectionStatisticsDetectedEvents]: DeviceDetectionStatisticsDetectedEventsProperty,
     [PropertyName.DeviceDetectionStatisticsRecordedEvents]: DeviceDetectionStatisticsRecordedEventsProperty,
+  },
+  [DeviceType.NVR_S4_MAX]: {
+    ...GenericDeviceProperties,
   },
 };
 
@@ -9462,6 +9469,32 @@ export const StationProperties: Properties = {
     [PropertyName.StationTrackingAssistance]: StationTrackingAssistanceProperty,
     [PropertyName.StationCrossTrackingCameraList]: StationCrossTrackingCameraListProperty,
     [PropertyName.StationCrossTrackingGroupList]: StationCrossTrackingGroupListProperty,
+  },
+  [DeviceType.NVR_S4_MAX]: {
+    ...BaseStationProperties,
+    [PropertyName.StationLANIpAddress]: StationLanIpAddressProperty,
+    [PropertyName.StationMacAddress]: StationMacAddressProperty,
+    [PropertyName.StationGuardMode]: StationGuardModeProperty,
+    [PropertyName.StationCurrentMode]: StationCurrentModeProperty,
+    [PropertyName.StationTimeFormat]: StationTimeFormatProperty,
+    [PropertyName.StationTimeZone]: StationTimeZoneProperty,
+    [PropertyName.StationAlarmVolume]: StationAlarmVolumeProperty,
+    [PropertyName.StationAlarmTone]: StationAlarmToneProperty,
+    [PropertyName.StationAutoEndAlarm]: StationAutoEndAlarmProperty,
+    [PropertyName.StationNotificationSwitchModeSchedule]: StationNotificationSwitchModeScheduleProperty,
+    [PropertyName.StationNotificationSwitchModeGeofence]: StationNotificationSwitchModeGeofenceProperty,
+    [PropertyName.StationNotificationSwitchModeApp]: StationNotificationSwitchModeAppProperty,
+    [PropertyName.StationNotificationSwitchModeKeypad]: StationNotificationSwitchModeKeypadProperty,
+    [PropertyName.StationNotificationStartAlarmDelay]: StationNotificationStartAlarmDelayProperty,
+    [PropertyName.StationSdStatus]: StationSdStatusProperty,
+    [PropertyName.StationHomeSecuritySettings]: StationHomeSecuritySettings,
+    [PropertyName.StationAwaySecuritySettings]: StationAwaySecuritySettings,
+    [PropertyName.StationCustom1SecuritySettings]: StationCustom1SecuritySettings,
+    [PropertyName.StationCustom2SecuritySettings]: StationCustom2SecuritySettings,
+    [PropertyName.StationCustom3SecuritySettings]: StationCustom3SecuritySettings,
+    [PropertyName.StationOffSecuritySettings]: StationOffSecuritySettings,
+    [PropertyName.StationAlarm]: StationAlarmProperty,
+    [PropertyName.StationAlarmType]: StationAlarmTypeProperty,
   },
   [DeviceType.INDOOR_CAMERA]: {
     ...BaseStationProperties,
@@ -10823,6 +10856,7 @@ export const DeviceCommands: Commands = {
     CommandName.DeviceSnooze,
     CommandName.DevicePanAndTilt,
   ],
+  [DeviceType.NVR_S4_MAX]: [],
 };
 
 DeviceCommands[DeviceType.INDOOR_PT_CAMERA_C220_V2] = DeviceCommands[DeviceType.INDOOR_PT_CAMERA_C220];
@@ -10851,6 +10885,16 @@ export const StationCommands: Commands = {
     CommandName.StationDatabaseDelete,
   ],
   [DeviceType.HOMEBASE_MINI]: [
+    CommandName.StationReboot,
+    CommandName.StationTriggerAlarmSound,
+    CommandName.StationDownloadImage,
+    CommandName.StationDatabaseQueryLatestInfo,
+    CommandName.StationDatabaseQueryByDate,
+    CommandName.StationDatabaseQueryLocal,
+    CommandName.StationDatabaseCountByDate,
+    CommandName.StationDatabaseDelete,
+  ],
+  [DeviceType.NVR_S4_MAX]: [
     CommandName.StationReboot,
     CommandName.StationTriggerAlarmSound,
     CommandName.StationDownloadImage,
