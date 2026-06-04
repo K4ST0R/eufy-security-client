@@ -85,5 +85,8 @@
   "bugs": {
     "url": "https://github.com/bropat/eufy-security-client/issues"
   },
-  "readmeFilename": "README.md"
+  "readmeFilename": "README.md",
+  "optionalDependencies": {
+    "jpeg-js": "^0.4.4"
+  }
 }

@@ -30,6 +30,7 @@ import {
   EufyCamC35DetectionTypes,
 } from "./types";
 import { HTTPApi } from "./api";
+import { spliceV2Image, V2_PREFIX } from "./decodeImageV2";
 import { ensureError } from "../error";
 import { ImageBaseCodeError } from "./error";
 import { LockPushEvent } from "./../push/types";
@@ -702,6 +703,24 @@ export const getImageKey = function (serialNumber: string, p2pDid: string, code:
 
 export const decodeImage = function (p2pDid: string, data: Buffer): Buffer {
   if (data.length >= 12) {
+    // v6 "v2_eufysecurity:" thumbnails: head-only obfuscation, decodable WITHOUT
+    // any key (see decodeImageV2.ts). The encrypted JPEG header only hid the
+    // quantization tables + dimensions; the scan data is plaintext standard JPEG.
+    //
+    // NOTE / LIMITATION: this synchronous path reconstructs with a FIXED geometry of
+    // 288x176 4:2:0 — the standard event-thumbnail size, which covers the common
+    // push-notification image. Images of OTHER sizes (e.g. 552x408, 1272x728, 4:4:4
+    // snapshots) will be SHEARED here, because the true dimensions can only be
+    // recovered by trial decoding, which is async and not possible in this sync API.
+    //
+    // TODO: cover all sizes — add an async decode path (decodeV2ImageAuto() in
+    // decodeImageV2.ts already does width/height/subsampling auto-detection via the
+    // optional jpeg-js dep) and have the callers in api.ts (getImage) and
+    // p2p/session.ts await it, OR pass the real dimensions in from event metadata.
+    if (data.subarray(0, V2_PREFIX.length).toString("latin1") === V2_PREFIX) {
+      const spliced = spliceV2Image(data, 288, 176, "4:2:0");
+      return spliced ?? data;
+    }
     const header = data.subarray(0, 12).toString();
     if (header === "eufysecurity") {
       const serialNumber = data.subarray(13, 29).toString();
