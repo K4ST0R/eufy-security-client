@@ -62,7 +62,7 @@ import {
   VerfyCodeTypes,
 } from "./types";
 import { ParameterHelper } from "./parameter";
-import { encryptAPIData, decryptAPIData, getTimezoneGMTString, decodeImage, hexDate, hexTime, hexWeek } from "./utils";
+import { encryptAPIData, decryptAPIData, getTimezoneGMTString, decodeImageAsync, hexDate, hexTime, hexWeek } from "./utils";
 import { InvalidCountryCodeError, InvalidLanguageCodeError, ensureError } from "./../error";
 import { getError, getShortUrl, md5, mergeDeep, parseJSON } from "./../utils";
 import {
@@ -1999,7 +1999,7 @@ export class HTTPApi extends TypedEmitter<HTTPApiEvents> {
               true
             );
             if (response.status == 200) {
-              return decodeImage(station.p2p_did, response.data as Buffer);
+              return await decodeImageAsync(station.p2p_did, response.data as Buffer);
             } else {
               rootHTTPLogger.error("Get Image - Status return code not 200", {
                 status: response.status,
