@@ -62,7 +62,15 @@ import {
   VerfyCodeTypes,
 } from "./types";
 import { ParameterHelper } from "./parameter";
-import { encryptAPIData, decryptAPIData, getTimezoneGMTString, decodeImageAsync, hexDate, hexTime, hexWeek } from "./utils";
+import {
+  encryptAPIData,
+  decryptAPIData,
+  getTimezoneGMTString,
+  decodeImageAsync,
+  hexDate,
+  hexTime,
+  hexWeek,
+} from "./utils";
 import { InvalidCountryCodeError, InvalidLanguageCodeError, ensureError } from "./../error";
 import { getError, getShortUrl, md5, mergeDeep, parseJSON } from "./../utils";
 import {

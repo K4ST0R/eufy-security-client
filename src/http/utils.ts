@@ -749,10 +749,7 @@ export const decodeImage = function (p2pDid: string, data: Buffer): Buffer {
  * delegated unchanged to the synchronous {@link decodeImage}.
  */
 export const decodeImageAsync = async function (p2pDid: string, data: Buffer): Promise<Buffer> {
-  if (
-    data.length >= V2_PREFIX.length &&
-    data.subarray(0, V2_PREFIX.length).toString("latin1") === V2_PREFIX
-  ) {
+  if (data.length >= V2_PREFIX.length && data.subarray(0, V2_PREFIX.length).toString("latin1") === V2_PREFIX) {
     try {
       const auto = await decodeV2ImageAuto(data);
       if (auto) return auto.jpeg;
