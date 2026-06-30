@@ -30,9 +30,13 @@ interface MegaRoute {
   path: string;
 }
 
+// Intentionally empty: this PR keeps v6 to login + push only, so every endpoint falls back to
+// legacy. The earlier guesses (passport/profile -> get_user_param, trust_device/list ->
+// list_trust_device) were wrong — get_user_param returns user prefs, not the profile, and expects a
+// `{params:[...]}` body (so an empty body 400s). The native v6 data layer (get_house_list,
+// get_devs_list, get_device_param_list, ...) belongs in the new library; this map only grows here if
+// a v6 endpoint is confirmed against a captured request.
 const ENDPOINT_MAP: Record<string, MegaRoute> = {
-  "v2/passport/profile": { service: "passport", path: "/passport/get_user_param" },
-  "v1/app/trust_device/list": { service: "passport", path: "/passport/list_trust_device" },
 };
 
 /**
