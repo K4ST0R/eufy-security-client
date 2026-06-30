@@ -2,12 +2,12 @@
  * Keyless decoder for eufy `v2_eufysecurity:` event / thumbnail images.
  *
  * The v2 wire format is NOT end-to-end encrypted and needs NO key, cipher, or
- * E2E private key. It is *head-only obfuscation*: only a fixed ~286-byte JPEG
- * prefix is AES-GCM encrypted (SOI + APP0/JFIF + the two DQT quantization
- * tables + SOF dimensions + the first DHT table). Everything from the standard
- * baseline DC-chrominance Huffman table marker (`FF C4 00 1F 01`) onward — the
- * rest of the DHT, the SOS, the entire entropy-coded scan and the EOI — is left
- * as plaintext, standard baseline JPEG.
+ * E2E private key. It is *head-only obfuscation*: only a small JPEG prefix
+ * (~280-430 bytes, length varies per image) is AES-GCM encrypted (SOI +
+ * APP0/JFIF + the two DQT quantization tables + SOF dimensions + the first DHT
+ * table). Everything from the standard baseline DC-chrominance Huffman table
+ * marker (`FF C4 00 1F 01`) onward — the rest of the DHT, the SOS, the entire
+ * entropy-coded scan and the EOI — is left as plaintext, standard baseline JPEG.
  *
  * So we reconstruct a viewable JPEG by splicing a freshly built *standard*
  * libjpeg header (correct width/height + chroma subsampling) onto the blob's
@@ -17,8 +17,12 @@
  *
  * Wire format:  v2_eufysecurity:<SERIAL>:<10-digit-pkt>:<binary-ciphertext>
  *
- * Reverse-engineered 2026-06-04. Verified on 136 live blobs across every camera
- * model / resolution under HomeBase 3 (dominant 256x144 4:2:0 = event thumbnail).
+ * Reverse-engineered 2026-06-04; verified on 136 live blobs across every camera
+ * model / resolution under HomeBase 3. On 2026-06-10 the reconstruction was
+ * cross-checked against the app's OWN decoded output (carved from the running
+ * app's heap): the keyless splice matches it, and push thumbnails are 288x176
+ * 4:2:0 (other sizes — 256x144, 640x360, 4:4:4 snapshots — also occur, so the
+ * geometry is auto-detected rather than assumed; see decodeV2ImageAuto).
  */
 
 /** Standard baseline-JPEG DC-chrominance DHT marker — the first plaintext byte
@@ -194,10 +198,11 @@ export async function decodeV2ImageAuto(data: Buffer): Promise<{
   // NON-standard dimensions — so the ladder lands on the nearest standard size and
   // is wrong in two ways that need different fixes:
   //
-  //  • WIDTH (large snapshots, e.g. 1272 vs 1280): an off-by-a-few-pixels width
-  //    shears every row. We find the true width by minimising row-to-row difference
-  //    (shear raises it). This metric is reliable for large/smooth images but too
-  //    noisy for small detailed thumbnails, so width-refinement is gated to >384px.
+  //  • WIDTH (e.g. a 288 thumbnail snapped to the ladder's 256, or 1272 vs 1280):
+  //    a wrong width shears every row. We find the true width by minimising
+  //    row-to-row difference (shear raises it) over a ±25% band around the ladder
+  //    guess. The per-image vdiff MINIMUM is reliable even for small detailed
+  //    thumbnails — validated against the app's own 288x176 render (2026-06-10).
   //
   //  • HEIGHT (any size, e.g. 256×192 snapped to 256×144): the ladder height can be
   //    SHORTER than the real image, cutting off the bottom (the ladder frame still

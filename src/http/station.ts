@@ -293,6 +293,7 @@ export class Station extends TypedEmitter<StationEvents> {
       this.onSequenceError(channel, command, sequence, serialnumber)
     );
     this.p2pSession.on("hub notify update", () => this.onHubNotifyUpdate());
+    this.p2pSession.on("push notification", (message: PushMessage) => this.onPushNotification(message));
   }
 
   protected initializeState(): void {
@@ -18067,6 +18068,10 @@ export class Station extends TypedEmitter<StationEvents> {
 
   private onHubNotifyUpdate(): void {
     this.emit("hub notify update", this);
+  }
+
+  private onPushNotification(message: PushMessage): void {
+    this.emit("push notification", this, message);
   }
 
   public updateUsername(device: Device, username: string, passwordId: string): void {

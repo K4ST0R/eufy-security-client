@@ -14,6 +14,7 @@ import {
   StreamMetadata,
 } from "../p2p/interfaces";
 import { CommandResult, StorageInfoBodyHB3 } from "../p2p/models";
+import { PushMessage } from "../push/models";
 import {
   AlarmEvent,
   DatabaseReturnCode,
@@ -274,6 +275,7 @@ export interface StationEvents {
   "garage door status": (station: Station, channel: number, doorId: number, status: number) => void;
   "storage info hb3": (station: Station, channel: number, storageInfo: StorageInfoBodyHB3) => void;
   "hub notify update": (station: Station) => void;
+  "push notification": (station: Station, message: PushMessage) => void;
 }
 
 export interface DeviceEvents {

@@ -1,4 +1,6 @@
 export * from "./api";
+export * from "./megaApi";
+export * from "./megaCrypto";
 export * from "./cache";
 export * from "./device";
 export * from "./interfaces";

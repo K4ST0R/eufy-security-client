@@ -7,6 +7,7 @@ import { Readable } from "stream";
 
 import { Device } from "./http/device";
 import { HTTPApiPersistentData, Picture, PropertyValue, Schedule } from "./http/interfaces";
+import { MegaSession } from "./http/megaApi";
 import { Station } from "./http/station";
 import { DeviceSmartLockMessage } from "./mqtt/model";
 import {
@@ -65,6 +66,7 @@ export interface EufySecurityPersistentData {
   version: string;
   httpApi?: HTTPApiPersistentData;
   fallbackTrustedDeviceName?: string;
+  megaApi?: MegaSession;
 }
 
 export interface EufySecurityEvents {

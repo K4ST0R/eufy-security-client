@@ -40,11 +40,14 @@ import {
     getImageSeed,
     getImageKey,
     decodeImage,
+    decodeImageAsync,
     getImage, getImagePath, isPrioritySourceType, decryptTrackerData, getLockEventType, getRandomPhoneModel
 } from "../utils";
 import {Schedule} from "../interfaces";
 import {createCipheriv} from "crypto";
 import {LockPushEvent} from "../../push";
+import {readFileSync} from "fs";
+import {join} from "path";
 
 describe('Utils file', () => {
     test("Test a valid version to normalise" , () => {
@@ -529,6 +532,50 @@ describe('Utils file', () => {
 
         // result should be 'otherData' (everything from index 41 onwards)
         expect(result.length).toBe(payload.length);
+    });
+
+    // Parse the SOFn marker of a baseline JPEG and return [width, height], or null.
+    const jpegDimensions = (buf: Buffer): [number, number] | null => {
+        for (let i = 2; i < buf.length - 9; ) {
+            if (buf[i] !== 0xff) { i++; continue; }
+            const marker = buf[i + 1];
+            if (marker >= 0xc0 && marker <= 0xc3) {
+                return [buf.readUInt16BE(i + 7), buf.readUInt16BE(i + 5)];
+            }
+            if (marker === 0xd8 || marker === 0xd9 || (marker >= 0xd0 && marker <= 0xd7)) { i += 2; continue; }
+            i += 2 + buf.readUInt16BE(i + 2);
+        }
+        return null;
+    };
+
+    // Real captured "v2_eufysecurity:" doorbell thumbnail (head-only obfuscation).
+    // Extracted from the running app's heap on 2026-06-10; the app's own decoded
+    // render confirmed it is a 288x176 4:2:0 baseline JPEG.
+    const v2Blob = readFileSync(join(__dirname, "fixtures", "v2_thumbnail.bin"));
+
+    it('should reconstruct a v2_eufysecurity blob synchronously (fixed 288x176 fallback)', () => {
+        const result = decodeImage("DID-123", v2Blob);
+
+        // valid JPEG (SOI ... EOI)
+        expect(result.subarray(0, 2)).toEqual(Buffer.from([0xff, 0xd8]));
+        expect(result.subarray(-2)).toEqual(Buffer.from([0xff, 0xd9]));
+        expect(jpegDimensions(result)).toEqual([288, 176]);
+    });
+
+    it('should auto-detect v2_eufysecurity geometry asynchronously', async () => {
+        const result = await decodeImageAsync("DID-123", v2Blob);
+
+        expect(result.subarray(0, 2)).toEqual(Buffer.from([0xff, 0xd8]));
+        expect(result.subarray(-2)).toEqual(Buffer.from([0xff, 0xd9]));
+        // auto-detection recovers the true geometry (matches the app's own render)
+        expect(jpegDimensions(result)).toEqual([288, 176]);
+    });
+
+    it('should pass non-v2 data through decodeImageAsync unchanged', async () => {
+        const rawData = Buffer.from("not-eufy-data-at-all");
+        const result = await decodeImageAsync("DID-123", rawData);
+
+        expect(result).toEqual(rawData);
     });
 
 });
