@@ -93,8 +93,16 @@ export class EufyMegaTransport extends HTTPApi {
       // Re-wrap into the `{code,msg,data}` envelope the inherited HTTPApi methods expect.
       return { status: 200, statusText: "", headers: {}, data: { code: 0, msg: "success!", data: decrypted } };
     } catch (err) {
-      rootHTTPLogger.warn("MegaTransport: v6 call failed", { endpoint: request.endpoint, error: (err as Error).message });
-      return { status: 500, statusText: (err as Error).message, headers: {}, data: { code: -1, msg: (err as Error).message } };
+      rootHTTPLogger.warn("MegaTransport: v6 call failed", {
+        endpoint: request.endpoint,
+        error: (err as Error).message,
+      });
+      return {
+        status: 500,
+        statusText: (err as Error).message,
+        headers: {},
+        data: { code: -1, msg: (err as Error).message },
+      };
     }
   }
 }

@@ -113,7 +113,8 @@ describe("connect() v6-first state machine", () => {
     const h = makeHarness({
       megaResults: ["tfa_required", "ok"],
       legacy: async (t) => {
-        if (h.legacyConnect.mock.calls.length === 1) t.recordLegacyChallenge(); // legacy asks on first try
+        if (h.legacyConnect.mock.calls.length === 1)
+          t.recordLegacyChallenge(); // legacy asks on first try
         else h.state.connected = true; // legacy ok on second
       },
     });
@@ -164,7 +165,12 @@ describe("connect() v6-first state machine", () => {
 
   it("serialises concurrent connect() calls", async () => {
     let resolveMega: (v: MegaLoginResult) => void;
-    const h = makeHarness({ megaResults: [], legacy: async () => { h.state.connected = true; } });
+    const h = makeHarness({
+      megaResults: [],
+      legacy: async () => {
+        h.state.connected = true;
+      },
+    });
     (h.loginMega as jest.Mock).mockImplementation(() => new Promise((r) => (resolveMega = r as never)));
 
     const p1 = connect(h);
