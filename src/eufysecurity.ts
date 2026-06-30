@@ -332,10 +332,10 @@ export class EufySecurity extends TypedEmitter<EufySecurityEvents> {
       this.persistentData.httpApi = undefined;
     }
 
-    // All v6 ("eufy_mega") behaviour is isolated in MegaTransition (transport, login, push,
-    // connect sequencing). It talks back to us only through this narrow host surface, and it builds
-    // the live transport: a single `this.api` (legacy + mega) so platforms don't know which backend
-    // is live. Removing the transition layer reverts everything to the upstream legacy behaviour.
+    // All v6 ("eufy_mega") behaviour is isolated in MegaTransition (login, push, connect
+    // sequencing). It talks back to us only through this narrow host surface and builds the live
+    // transport (the legacy HTTPApi today). Removing the transition layer reverts everything to the
+    // upstream legacy behaviour.
     this.megaTransition = new MegaTransition(this.megaTransitionHost());
     this.api = await this.megaTransition.createTransport(this.persistentData.httpApi);
     this.api.setLanguage(this.config.language);

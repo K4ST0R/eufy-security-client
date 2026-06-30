@@ -169,7 +169,7 @@ export class HTTPApi extends TypedEmitter<HTTPApiEvents> {
 
   private FIFTEEN_YEARS_IN_MS = 15 * 365 * 24 * 60 * 60 * 1000;
 
-  protected constructor(
+  private constructor(
     apiBase: string,
     country: string,
     username: string,
@@ -259,7 +259,7 @@ export class HTTPApi extends TypedEmitter<HTTPApiEvents> {
     });
   }
 
-  protected async loadLibraries(): Promise<void> {
+  private async loadLibraries(): Promise<void> {
     /**
      * Load library
      *

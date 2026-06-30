@@ -1,115 +1,28 @@
 import { HTTPApi } from "./api";
 import { MegaHTTPApi, megaLoginHash } from "./megaApi";
-import { rootHTTPLogger, rootMainLogger } from "../logging";
-import type { HTTPApiRequest, HTTPApiPersistentData, LoginOptions } from "./interfaces";
-import type { ApiResponse } from "./models";
+import { rootMainLogger } from "../logging";
+import type { HTTPApiPersistentData, LoginOptions } from "./interfaces";
 import type { EufySecurityConfig, EufySecurityPersistentData } from "../interfaces";
 import { ResponseErrorCode } from "./types";
-import { InvalidCountryCodeError, ensureError } from "../error";
+import { ensureError } from "../error";
 import { getError } from "../utils";
-import { isValid as isValidCountry } from "i18n-iso-countries";
 
 /**
  * Everything specific to the transitional v6 "eufy_mega" backend lives in this single file so it can
- * be removed in one block once the legacy plaintext API is fully decommissioned and a native v6 data
- * layer replaces it. It holds two pieces:
+ * be removed in one block once a native v6 data layer (the new library) takes over.
  *
- *  - {@link EufyMegaTransport}: a thin {@link HTTPApi} subclass that routes mapped endpoints through
- *    the signed/encrypted v6 backend and falls back to the inherited legacy behaviour otherwise.
- *  - {@link MegaTransition}: the connect coordinator — v6-first login, legacy as best-effort
- *    afterwards, the app-ready signal fired exactly once at the end. It owns all the v6 state
- *    (mega client, pending challenge, serialisation) and talks to {@link EufySecurity} only through
- *    the narrow {@link MegaTransitionHost} surface, so neither file leaks the other's internals.
+ * {@link MegaTransition} is the connect coordinator: v6-first login, legacy as best-effort
+ * afterwards, the app-ready signal fired exactly once at the end. It owns all the v6 state (mega
+ * client, pending challenge, serialisation) and talks to {@link EufySecurity} only through the
+ * narrow {@link MegaTransitionHost} surface, so neither file leaks the other's internals.
+ *
+ * For now v6 is used only for login + FCM push registration: a migrated account logs in there and
+ * receives events over its push channel, while the data layer keeps using the legacy transport. The
+ * data endpoints differ on v6 (signed/encrypted, different paths/bodies) and belong in the new lib,
+ * so we deliberately do NOT route legacy endpoints through mega here.
  *
  * Nothing here modifies {@link MegaHTTPApi}: this layer only consumes its public API.
  */
-
-/** A legacy endpoint path (no query) -> its v6 cluster service + path. */
-interface MegaRoute {
-  service: string;
-  path: string;
-}
-
-// Intentionally empty: this PR keeps v6 to login + push only, so every endpoint falls back to
-// legacy. The earlier guesses (passport/profile -> get_user_param, trust_device/list ->
-// list_trust_device) were wrong — get_user_param returns user prefs, not the profile, and expects a
-// `{params:[...]}` body (so an empty body 400s). The native v6 data layer (get_house_list,
-// get_devs_list, get_device_param_list, ...) belongs in the new library; this map only grows here if
-// a v6 endpoint is confirmed against a captured request.
-const ENDPOINT_MAP: Record<string, MegaRoute> = {
-};
-
-/**
- * Transitional v6 transport layered on top of {@link HTTPApi}.
- *
- * A migrated account speaks only the signed/encrypted mega transport, even on the historical
- * `*.eufylife.com` hosts; the legacy plaintext endpoints return 401. Instead of rewriting every
- * HTTPApi method, this subclass overrides the single `request()` entry point: a mapped endpoint is
- * routed through the delegate {@link MegaHTTPApi} (signed + encrypted, response decrypted), while
- * everything unmapped falls back to the inherited legacy behaviour. The map grows one entry at a
- * time as each v6 endpoint is confirmed.
- */
-export class EufyMegaTransport extends HTTPApi {
-  private readonly mega: MegaHTTPApi;
-
-  protected constructor(
-    apiBase: string,
-    country: string,
-    username: string,
-    password: string,
-    mega: MegaHTTPApi,
-    persistentData?: HTTPApiPersistentData
-  ) {
-    super(apiBase, country, username, password, persistentData);
-    this.mega = mega;
-  }
-
-  /** Mirror of {@link HTTPApi.initialize}, plus the shared mega client used to route v6 endpoints. */
-  static async initializeWithMega(
-    country: string,
-    username: string,
-    password: string,
-    persistentData: HTTPApiPersistentData | undefined,
-    mega: MegaHTTPApi
-  ): Promise<EufyMegaTransport> {
-    if (isValidCountry(country) && country.length === 2) {
-      const apiBase = await HTTPApi.getApiBaseFromCloud(country);
-      const api = new EufyMegaTransport(apiBase, country, username, password, mega, persistentData);
-      await api.loadLibraries();
-      return api;
-    }
-    throw new InvalidCountryCodeError("Invalid ISO 3166-1 Alpha-2 country code", { context: { countryCode: country } });
-  }
-
-  private static routeKey(endpoint: string | URL): string {
-    const raw = typeof endpoint === "string" ? endpoint : endpoint.toString();
-    return raw.split("?")[0].replace(/\/$/, "");
-  }
-
-  public override async request(request: HTTPApiRequest, withoutUrlPrefix = false): Promise<ApiResponse> {
-    const route = ENDPOINT_MAP[EufyMegaTransport.routeKey(request.endpoint)];
-    if (!route) {
-      return super.request(request, withoutUrlPrefix);
-    }
-    rootHTTPLogger.debug("MegaTransport: routing via v6", { endpoint: request.endpoint, route });
-    try {
-      const decrypted = await this.mega.callDecrypted(route.service, route.path, request.data ?? {});
-      // Re-wrap into the `{code,msg,data}` envelope the inherited HTTPApi methods expect.
-      return { status: 200, statusText: "", headers: {}, data: { code: 0, msg: "success!", data: decrypted } };
-    } catch (err) {
-      rootHTTPLogger.warn("MegaTransport: v6 call failed", {
-        endpoint: request.endpoint,
-        error: (err as Error).message,
-      });
-      return {
-        status: 500,
-        statusText: (err as Error).message,
-        headers: {},
-        data: { code: -1, msg: (err as Error).message },
-      };
-    }
-  }
-}
 
 /** The result of one v6 login attempt. */
 export type MegaLoginResult = "ok" | "tfa_required" | "captcha_required" | "locked" | "failed";
@@ -125,7 +38,7 @@ export type ChallengeSource = "mega" | "legacy";
 export interface MegaTransitionHost {
   readonly config: EufySecurityConfig;
   readonly persistentData: EufySecurityPersistentData;
-  /** The live transport (legacy + mega), set once by {@link MegaTransition.createTransport}. */
+  /** The live (legacy) transport, set once by {@link MegaTransition.createTransport}. */
   readonly api: HTTPApi;
   writePersistentData(): void;
   /** Re-emit the 2FA prompt to the consumer (ws / plugin). */
@@ -170,15 +83,17 @@ export class MegaTransition {
     this.pendingChallenge = "legacy";
   }
 
-  /** Build the live transport: a shared mega client wrapped by {@link EufyMegaTransport}. */
+  /**
+   * Build the live transport. Today this is just the upstream legacy {@link HTTPApi}; the v6 mega
+   * client is created lazily on demand (login / push) via {@link getMegaApi}. Kept as a single
+   * factory so the transport can be swapped here if v6 ever needs to drive data requests too.
+   */
   public async createTransport(persistentHttpApi: HTTPApiPersistentData | undefined): Promise<HTTPApi> {
-    const mega = await this.getMegaApi();
-    return EufyMegaTransport.initializeWithMega(
+    return HTTPApi.initialize(
       this.host.config.country!,
       this.host.config.username!,
       this.host.config.password!,
-      persistentHttpApi,
-      mega
+      persistentHttpApi
     );
   }
 
