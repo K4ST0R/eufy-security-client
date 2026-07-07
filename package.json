@@ -23,7 +23,8 @@
     "lint": "eslint --ext .ts src",
     "prepublishOnly": "tsc -p tsconfig.build.json && npm run copy-proto-build",
     "format": "prettier --write \"src/**/*.ts\"",
-    "format:check": "prettier --check \"src/**/*.ts\""
+    "format:check": "prettier --check \"src/**/*.ts\"",
+    "prepare": "npm run build:ts"
   },
   "license": "MIT",
   "keywords": [
