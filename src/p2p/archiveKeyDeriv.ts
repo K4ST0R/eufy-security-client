@@ -75,7 +75,19 @@ export function extractArchiveGTS(msgData: Buffer): string | null {
   return m ? m[0] : null;
 }
 
-const SPS_PREFIX = Buffer.from([0x00, 0x00, 0x00, 0x01, 0x27]); // NAL SPS H.264
+const NAL_START = Buffer.from([0x00, 0x00, 0x00, 0x01]);
+/**
+ * Une keyframe déchiffrée commence par un start code + un NAL de début de keyframe :
+ *  - SPS (type 7) : la 1re keyframe du flux (SPS+PPS+IDR) -> 0x27/0x67/...
+ *  - IDR slice (type 5) : les keyframes SUIVANTES commencent souvent direct par l'IDR -> 0x25/0x65/...
+ * Ne valider que le SPS (ancien code) laissait les IDR chiffrées -> demi-image sur le reste du clip.
+ * On teste le type NAL (5 bits de poids faible), indépendamment du nal_ref_idc.
+ */
+function isKeyframeStart(out: Buffer): boolean {
+  if (!out.subarray(0, 4).equals(NAL_START)) return false;
+  const nalType = out[4] & 0x1f;
+  return nalType === 7 || nalType === 5;
+}
 
 /**
  * Dérive key_data pour une keyframe, en auto-calibrant ppcsSuffix (constante/device) :
@@ -106,7 +118,7 @@ export function deriveArchiveKeyCalibrated(
     } catch {
       return null;
     }
-    return out.subarray(0, 5).equals(SPS_PREFIX) ? kd : null;
+    return isKeyframeStart(out) ? kd : null;
   };
   if (knownSuffix !== undefined && knownSuffix !== null) {
     const kd = test(knownSuffix);
