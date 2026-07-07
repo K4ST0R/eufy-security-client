@@ -85,8 +85,10 @@ const NAL_START = Buffer.from([0x00, 0x00, 0x00, 0x01]);
  */
 function isKeyframeStart(out: Buffer): boolean {
   if (!out.subarray(0, 4).equals(NAL_START)) return false;
+  if ((out[4] & 0x80) !== 0) return false; // forbidden_zero_bit doit être 0 (NAL H.264 valide)
   const nalType = out[4] & 0x1f;
-  return nalType === 7 || nalType === 5;
+  // NALs de début d'access-unit/keyframe : IDR(5), SEI(6), SPS(7), PPS(8), AUD(9)
+  return nalType >= 5 && nalType <= 9;
 }
 
 /**
@@ -121,8 +123,17 @@ export function deriveArchiveKeyCalibrated(
     return isKeyframeStart(out) ? kd : null;
   };
   if (knownSuffix !== undefined && knownSuffix !== null) {
-    const kd = test(knownSuffix);
-    if (kd) return { keyData: kd, ppcsSuffix: knownSuffix };
+    // Suffixe déjà calibré (constante par device) : on lui fait CONFIANCE et on dérive
+    // directement, SANS re-valider le NAL. Certaines keyframes commencent par un NAL
+    // AUD/SEI/PPS (pas SPS/IDR) et échoueraient un check strict -> keyframe laissée
+    // chiffrée -> artefacts plus loin dans le clip. gTS constant/clip + suffixe constant
+    // => la clé est correcte pour TOUTES les keyframes, pas besoin de re-vérifier.
+    try {
+      const kd = genPicCodeV1(sn, did, gts10, knownSuffix).slice(0, 16);
+      return { keyData: kd, ppcsSuffix: knownSuffix };
+    } catch {
+      // dérivation impossible avec ce suffixe -> brute-force ci-dessous
+    }
   }
   for (let s = 0; s <= maxSuffix; s++) {
     const kd = test(s);
