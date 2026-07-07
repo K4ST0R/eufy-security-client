@@ -15429,23 +15429,25 @@ export class Station extends TypedEmitter<StationEvents> {
     this.p2pSession.sendCommandWithStringPayload(
       {
         commandType: CommandType.CMD_SET_PAYLOAD,
+        // PATCH ENC_EEC : params corrigés (capturés de l'app) -> renvoie les records
+        // avec cipher_id + storage_path. Les params d'origine (mChannel:0, device_info,
+        // res_unzip, start_time "…000000") renvoyaient 0 record sur les stations "mega".
         value: JSON.stringify({
           account_id: this.rawStation.member.admin_user_id,
           cmd: CommandType.CMD_DATABASE,
-          mChannel: 0,
+          mChannel: 255,
           mValue3: 0,
           payload: {
             cmd: CommandType.CMD_DATABASE_QUERY_LOCAL,
             payload: {
               count: 20,
               detection_type: detectionType,
-              device_info: devices,
               end_date: format(endDate, "YYYYMMDD"),
               event_type: eventType,
               flag: 0,
-              res_unzip: 1,
               start_date: format(startDate, "YYYYMMDD"),
-              start_time: `${format(startDate, "YYYYMMDD")}000000`,
+              start_time: "0",
+              trigger_type: 0,
               storage_cloud:
                 storageType === FilterStorageType.NONE ||
                 (storageType !== FilterStorageType.LOCAL && storageType !== FilterStorageType.CLOUD)
@@ -15457,7 +15459,7 @@ export class Station extends TypedEmitter<StationEvents> {
             transaction: `${new Date().getTime()}`,
           },
         }),
-        channel: 0,
+        channel: 255,
       },
       {
         command: commandData,
