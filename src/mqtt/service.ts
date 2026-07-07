@@ -5,7 +5,7 @@ import * as path from "path";
 import { load, Root } from "protobufjs";
 
 import { MQTTServiceEvents } from "./interface";
-import { DeviceSmartLockMessage } from "./model";
+import { DeviceSmartLockMessage, DoorbellPushMessage } from "./model";
 import { getError } from "../utils";
 import { rootMainLogger, rootMQTTLogger } from "../logging";
 import { ensureError } from "../error";
@@ -29,6 +29,10 @@ export class MQTTService extends TypedEmitter<MQTTServiceEvents> {
   private email?: string;
 
   private subscribeLocks: Array<string> = [];
+  private subscribeDoorbells: Array<string> = [];
+  // True while no live client owns the connection (none yet, or the last one was `.end()`ed).
+  // Guards against spawning a second mqtt client (same clientId) during an auto-reconnect gap.
+  private clientEnded = true;
 
   private deviceSmartLockMessageModel: any;
 
@@ -83,13 +87,15 @@ export class MQTTService extends TypedEmitter<MQTTServiceEvents> {
     if (
       !this.connected &&
       !this.connecting &&
+      this.clientEnded &&
       this.clientID &&
       this.androidID &&
       this.apiBase &&
       this.email &&
-      this.subscribeLocks.length > 0
+      (this.subscribeLocks.length > 0 || this.subscribeDoorbells.length > 0)
     ) {
       this.connecting = true;
+      this.clientEnded = false;
       this.client = mqtt.connect(this.getMQTTBrokerUrl(apiBase), {
         keepalive: 60,
         clean: true,
@@ -114,6 +120,13 @@ export class MQTTService extends TypedEmitter<MQTTServiceEvents> {
             this._subscribeLock(lock);
           }
         }
+
+        if (this.subscribeDoorbells.length > 0) {
+          let doorbell;
+          while ((doorbell = this.subscribeDoorbells.shift()) !== undefined) {
+            this._subscribeDoorbell(doorbell);
+          }
+        }
       });
       this.client.on("close", () => {
         this.connected = false;
@@ -127,14 +140,35 @@ export class MQTTService extends TypedEmitter<MQTTServiceEvents> {
           (error as any).code === 2 ||
           (error as any).code === 4 ||
           (error as any).code === 5
-        )
+        ) {
           this.client?.end();
+          this.clientEnded = true;
+        }
       });
       this.client.on("message", (topic, message, _packet) => {
         if (topic.includes("smart_lock")) {
           const parsedMessage = this.parseSmartLockMessage(message);
           rootMQTTLogger.debug("Received a smart lock message over MQTT", { message: parsedMessage });
           this.emit("lock message", parsedMessage);
+        } else if (topic.includes("doorbell")) {
+          try {
+            const parsedMessage = MQTTService.parseDoorbellPushMessage(message);
+            rootMQTTLogger.debug("Received a doorbell push message over MQTT", { topic: topic, message: parsedMessage });
+            if (parsedMessage.device_sn !== "" && parsedMessage.event_type > 0) {
+              this.emit("doorbell message", parsedMessage);
+            } else {
+              rootMQTTLogger.debug("Ignored an unparseable doorbell push message over MQTT", {
+                topic: topic,
+                message: message.toString("hex"),
+              });
+            }
+          } catch (error) {
+            rootMQTTLogger.error("Error parsing doorbell push message over MQTT", {
+              error: getError(ensureError(error)),
+              topic: topic,
+              message: message.toString("hex"),
+            });
+          }
         } else {
           rootMQTTLogger.debug("MQTT message received", { topic: topic, message: message.toString("hex") });
         }
@@ -169,6 +203,116 @@ export class MQTTService extends TypedEmitter<MQTTServiceEvents> {
     }
   }
 
+  private _subscribeDoorbell(deviceSN: string): void {
+    this.client?.subscribe(
+      this.SUBSCRIBE_DOORBELL_FORMAT.replace("<device_sn>", deviceSN),
+      { qos: 1 },
+      (error, granted) => {
+        if (error) {
+          rootMQTTLogger.error(`Subscribe error for doorbell ${deviceSN}`, {
+            error: getError(error),
+            deviceSN: deviceSN,
+          });
+        }
+        if (granted) {
+          rootMQTTLogger.info(`Successfully registered to MQTT notifications for doorbell ${deviceSN}`);
+        }
+      }
+    );
+  }
+
+  public subscribeDoorbell(deviceSN: string): void {
+    if (this.connected) {
+      this._subscribeDoorbell(deviceSN);
+    } else {
+      if (!this.subscribeDoorbells.includes(deviceSN)) {
+        this.subscribeDoorbells.push(deviceSN);
+      }
+      if (this.clientID && this.androidID && this.apiBase && this.email)
+        this.connect(this.clientID, this.androidID, this.apiBase, this.email);
+    }
+  }
+
+  /**
+   * Decode the eufy doorbell/camera push protobuf (topic `/phone/doorbell/<sn>/push_message`).
+   * Tolerant walker: only the fields we need are pulled, unknown fields are skipped, so a firmware
+   * that adds fields won't break parsing. Layout (reversed from the real app, eBPF capture):
+   *   #1 event_type, #3 event id, #15{ #1 push_time(ms), #20{ #7 file name, #10 station, #11 device } }.
+   */
+  public static parseDoorbellPushMessage(buf: Buffer): DoorbellPushMessage {
+    type Field = { wire: number; num: number; buf: Buffer | null };
+    const parse = (b: Buffer): Map<number, Field[]> => {
+      const map = new Map<number, Field[]>();
+      let p = 0;
+      const varint = (): number => {
+        let shift = 0;
+        let val = 0;
+        let byte = 0;
+        do {
+          byte = b[p++];
+          val += (byte & 0x7f) * Math.pow(2, shift);
+          shift += 7;
+        } while (byte & 0x80 && p < b.length);
+        return val;
+      };
+      while (p < b.length) {
+        const tag = varint();
+        const field = Math.floor(tag / 8);
+        const wire = tag & 7;
+        let entry: Field;
+        if (wire === 0) {
+          entry = { wire, num: varint(), buf: null };
+        } else if (wire === 2) {
+          const len = varint();
+          entry = { wire, num: 0, buf: b.subarray(p, p + len) };
+          p += len;
+        } else if (wire === 5) {
+          if (p + 4 > b.length) break;
+          entry = { wire, num: b.readUInt32LE(p), buf: null };
+          p += 4;
+        } else if (wire === 1) {
+          if (p + 8 > b.length) break;
+          entry = { wire, num: Number(b.readBigUInt64LE(p)), buf: null };
+          p += 8;
+        } else {
+          break;
+        }
+        const list = map.get(field);
+        if (list) list.push(entry);
+        else map.set(field, [entry]);
+      }
+      return map;
+    };
+
+    const firstBuf = (m: Map<number, Field[]>, f: number): Buffer | null => {
+      const e = m.get(f);
+      return e && e[0].buf ? e[0].buf : null;
+    };
+    const firstNum = (m: Map<number, Field[]>, f: number): number => {
+      const e = m.get(f);
+      return e ? e[0].num : 0;
+    };
+    const firstStr = (m: Map<number, Field[]>, f: number): string => {
+      const b = firstBuf(m, f);
+      return b ? b.toString("utf8") : "";
+    };
+
+    const top = parse(buf);
+    const detailBuf = firstBuf(top, 15);
+    const detail = detailBuf ? parse(detailBuf) : new Map<number, Field[]>();
+    const bodyBuf = firstBuf(detail, 20);
+    const body = bodyBuf ? parse(bodyBuf) : new Map<number, Field[]>();
+
+    return {
+      event_type: firstNum(top, 1),
+      event_id: firstStr(top, 3),
+      push_time: firstNum(detail, 1),
+      file_name: firstStr(body, 7),
+      station_sn: firstStr(body, 10),
+      device_sn: firstStr(body, 11),
+    };
+  }
+
   public isConnected(): boolean {
     return this.connected;
   }
@@ -176,6 +320,7 @@ export class MQTTService extends TypedEmitter<MQTTServiceEvents> {
   public close(): void {
     if (this.connected) {
       this.client?.end(true);
+      this.clientEnded = true;
       this.connected = false;
       this.connecting = false;
     }

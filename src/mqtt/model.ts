@@ -24,3 +24,18 @@ export interface DeviceSmartLockMessage {
   userId: string;
   data: DeviceSmartLockNotify;
 }
+
+/**
+ * Doorbell/camera push event delivered over MQTT on `/phone/doorbell/<device_sn>/push_message`.
+ * Decoded from the eufy protobuf payload (fields captured from the real app):
+ *   #1 event_type (DoorbellPushEvent: 3101 motion, 3103 ring, …), #3 event id,
+ *   #15{#1 push_time(ms), #20{#7 file name, #10 station sn, #11 device sn}}.
+ */
+export interface DoorbellPushMessage {
+  event_type: number;
+  event_id: string;
+  push_time: number;
+  station_sn: string;
+  device_sn: string;
+  file_name: string;
+}

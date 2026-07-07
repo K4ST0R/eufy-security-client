@@ -454,6 +454,32 @@ export class EufySecurity extends TypedEmitter<EufySecurityEvents> {
           this.emit("mqtt lock message", message);
         });
     });
+    this.mqttService.on("doorbell message", (message) => {
+      // The v6 "mega" stations (HB2/HB3) push doorbell motion/ring over MQTT instead of FCM.
+      // Rebuild a PushMessage and feed it through the normal push pipeline so motion/ring state,
+      // event images and HA properties are handled exactly like a legacy FCM push.
+      this.getDevice(message.device_sn)
+        .then((device: Device) => {
+          const pushMessage: PushMessage = {
+            name: device.getName(),
+            type: device.getDeviceType(),
+            event_time: message.push_time,
+            station_sn: message.station_sn !== "" ? message.station_sn : device.getStationSerial(),
+            device_sn: message.device_sn,
+            push_time: message.push_time,
+            event_type: message.event_type,
+            file_path: message.file_name,
+            msg_type: device.getDeviceType(),
+          };
+          this.onPushMessage(pushMessage);
+        })
+        .catch((err) => {
+          const error = ensureError(err);
+          if (!(error instanceof DeviceNotFoundError)) {
+            rootMainLogger.error("Doorbell MQTT Message Error", { error: getError(error), message: message });
+          }
+        });
+    });
   }
 
   public setLoggingLevel(category: LoggingCategories, level: LogLevel): void {
@@ -540,6 +566,7 @@ export class EufySecurity extends TypedEmitter<EufySecurityEvents> {
       this.emit("device added", device);
 
       if (device.isLock()) this.mqttService.subscribeLock(device.getSerial());
+      else if (device.isDoorbell()) this.mqttService.subscribeDoorbell(device.getSerial());
     } else {
       rootMainLogger.debug(`Device with this serial ${device.getSerial()} exists already and couldn't be added again!`);
     }
