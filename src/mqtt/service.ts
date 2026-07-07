@@ -62,6 +62,8 @@ export class MQTTService extends TypedEmitter<MQTTServiceEvents> {
   }
 
   private getMQTTBrokerUrl(apiBase: string): string {
+    // Known hosts first (some have special, non-derivable mappings, e.g. the China-QA
+    // app host on anker-in.com uses the eufylife.com QA broker).
     switch (apiBase) {
       case "https://security-app.eufylife.com":
         return "mqtts://security-mqtt.eufylife.com";
@@ -74,9 +76,15 @@ export class MQTTService extends TypedEmitter<MQTTServiceEvents> {
         return "mqtts://security-mqtt-eu.eufylife.com";
       case "https://security-app-short-qa.eufylife.com":
         return "mqtts://security-mqtt-short-qa.eufylife.com";
-      default:
-        return "mqtts://security-mqtt.eufylife.com";
     }
+    // Unknown host: derive the region-specific broker from it instead of always falling
+    // back to the global broker. The eufy MQTT broker is region-locked, so a non-global
+    // account sent to the global broker is rejected with CONNACK "Not authorized" (5).
+    // e.g. https://security-app-eu.eufylife.com -> mqtts://security-mqtt-eu.eufylife.com
+    if (apiBase.includes("security-app")) {
+      return apiBase.replace(/^https?:\/\//, "mqtts://").replace("security-app", "security-mqtt");
+    }
+    return "mqtts://security-mqtt.eufylife.com";
   }
 
   public connect(clientID: string, androidID: string, apiBase: string, email: string): void {

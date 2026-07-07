@@ -1321,7 +1321,13 @@ export class EufySecurity extends TypedEmitter<EufySecurityEvents> {
 
     const loginData = this.api.getPersistentData();
     if (loginData) {
-      this.mqttService.connect(loginData.user_id, this.persistentData.openudid, this.api.getAPIBase(), loginData.email);
+      // The eufy MQTT broker is REGION-LOCKED: an EU account connecting to the global
+      // broker is rejected with CONNACK "Not authorized" (code 5). The legacy HTTP api
+      // base can stay on the global host for migrated "mega" accounts, so prefer the
+      // region-correct security domain resolved by the v6 backend when available.
+      const securityDomain = this.persistentData.megaApi?.domains?.["eufy_security"];
+      const mqttApiBase = securityDomain ? `https://${securityDomain}` : this.api.getAPIBase();
+      this.mqttService.connect(loginData.user_id, this.persistentData.openudid, mqttApiBase, loginData.email);
     } else {
       rootMainLogger.warn("No login data recevied to initialize MQTT connection...");
     }
