@@ -7648,6 +7648,11 @@ export class Station extends TypedEmitter<StationEvents> {
   }
 
   public startLivestream(device: Device, videoCodec: VideoCodec = VideoCodec.H264): void {
+    // Le mode ARCHIVE ENC_EEC (déchiffrement inline des keyframes) ne doit JAMAIS s'appliquer
+    // au livestream : un download d'archive laisse archiveEncEecMode=true, ce qui appliquerait
+    // le déchiffrement aux keyframes du direct -> vidéo live corrompue jusqu'au redémarrage.
+    // On le remet à false ici (purge aussi le gTS d'archive).
+    this.p2pSession.setArchiveEncEecMode(false);
     const commandData: CommandData = {
       name: CommandName.DeviceStartLivestream,
       value: videoCodec,
@@ -8726,6 +8731,7 @@ export class Station extends TypedEmitter<StationEvents> {
   }
 
   public startRTSPStream(device: Device): void {
+    this.p2pSession.setArchiveEncEecMode(false); // idem startLivestream : jamais de déchiffrement archive sur un flux live
     const rtspStreamProperty = device.getPropertyValue(PropertyName.DeviceRTSPStream);
     if (rtspStreamProperty !== undefined && rtspStreamProperty !== true) {
       throw new RTSPPropertyNotEnabledError(

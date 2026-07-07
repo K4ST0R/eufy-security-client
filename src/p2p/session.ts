@@ -2270,7 +2270,10 @@ export class P2PClientProtocol extends TypedEmitter<P2PClientProtocolEvents> {
           videoMetaData.videoTimestamp = message.data.subarray(14, 20).readUIntLE(0, 6);
 
           let payloadStart = 22;
-          if (this.archiveEncEecMode) {
+          // Scopé au flux DOWNLOAD (BINARY) : le déchiffrement archive ne doit JAMAIS
+          // toucher le livestream (VIDEO), même si le flag est resté actif. eufy multiplexe
+          // déjà via les datatypes -> live (VIDEO) et download (BINARY) peuvent coexister.
+          if (this.archiveEncEecMode && message.dataType === P2PDataType.BINARY) {
             // ARCHIVE ENC_EEC : clé dérivée localement (SN+DID+gTS), 0 secret.
             // Seules les keyframes sont chiffrées (AES-128-ECB, 128 premiers o @22) ;
             // les P-frames sont en clair -> aesKey reste "" (bropat les laisse telles quelles).
@@ -4525,6 +4528,9 @@ export class P2PClientProtocol extends TypedEmitter<P2PClientProtocolEvents> {
     if (datatype === P2PDataType.VIDEO) {
       this.emit("livestream stopped", this.currentMessageState[datatype].p2pStreamChannel);
     } else if (datatype === P2PDataType.BINARY) {
+      // Download terminé -> couper le mode archive (sinon il resterait actif et corromprait
+      // les keyframes du prochain livestream). setArchiveEncEecMode(false) purge aussi le gTS.
+      if (this.archiveEncEecMode) this.setArchiveEncEecMode(false);
       this.emit("download finished", this.currentMessageState[datatype].p2pStreamChannel);
     }
   }
