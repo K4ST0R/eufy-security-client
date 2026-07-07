@@ -7545,7 +7545,8 @@ export class Station extends TypedEmitter<StationEvents> {
         /*this.rawStation.station_sn, */ cipher_id,
         this.rawStation.member.admin_user_id
       );
-      if (Object.keys(cipher).length > 0) {
+      if (cipher && Object.keys(cipher).length > 0) {
+        this.p2pSession.setArchiveEncEecMode(false);
         this.p2pSession.setDownloadRSAPrivateKeyPem(cipher.private_key);
         this.p2pSession.sendCommandWithString(
           {
@@ -7559,17 +7560,25 @@ export class Station extends TypedEmitter<StationEvents> {
           }
         );
       } else {
-        rootHTTPLogger.warn(
-          `Cancelled download of video "${path}" from Station ${this.getSerial()}, because RSA certificate couldn't be loaded`
+        // ARCHIVE ENC_EEC (stations "mega") : pas de cipher cloud pour ce clip -> la clé
+        // se dérive localement (SN+DID+gTS). On envoie quand même la commande de download
+        // et le déchiffrement des keyframes se fait inline (cf setArchiveEncEecMode).
+        rootHTTPLogger.info(
+          `Station ${this.getSerial()}: cipher cloud absent -> download ARCHIVE ENC_EEC (clé dérivée localement) "${path}"`
         );
-        this.emit("command result", this, {
-          channel: device.getChannel(),
-          command_type: CommandType.CMD_DOWNLOAD_VIDEO,
-          return_code: ErrorCode.ERROR_INVALID_PARAM,
-          customData: {
-            command: commandData,
+        this.p2pSession.setArchiveEncEecMode(true);
+        this.p2pSession.getDownloadRSAPrivateKey(); // initialise l'état BINARY pour recevoir le flux
+        this.p2pSession.sendCommandWithString(
+          {
+            commandType: CommandType.CMD_DOWNLOAD_VIDEO,
+            strValue: path,
+            strValueSub: this.rawStation.member.admin_user_id,
+            channel: device.getChannel(),
           },
-        });
+          {
+            command: commandData,
+          }
+        );
       }
     } else {
       this.p2pSession.sendCommandWithString(

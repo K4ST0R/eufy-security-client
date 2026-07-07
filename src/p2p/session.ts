@@ -68,6 +68,7 @@ import {
   readNullTerminatedBuffer,
   decryptP2PKeyECDH,
 } from "./utils";
+import { deriveArchiveKeyCalibrated, extractArchiveGTS } from "./archiveKeyDeriv";
 import {
   RequestMessageType,
   ResponseMessageType,
@@ -255,6 +256,10 @@ export class P2PClientProtocol extends TypedEmitter<P2PClientProtocolEvents> {
   private encryption: EncryptionType = EncryptionType.NONE;
   private p2pKey?: Buffer;
   private enableEmbeddedPKCS1Support = false;
+  // --- ARCHIVE ENC_EEC (history download, stations "mega" sans cipher cloud) ---
+  private archiveEncEecMode = false; // le prochain download utilise la clé dérivée localement
+  private archiveGTS: string | null = null; // gTS 10 chiffres reçu dans CMD_DOWNLOAD_VIDEO
+  private archivePpcsSuffix: number | null = null; // constante/device, auto-calibrée 1×
 
   constructor(
     rawStation: StationListResponse,
@@ -1882,6 +1887,19 @@ export class P2PClientProtocol extends TypedEmitter<P2PClientProtocolEvents> {
       const commandStr = CommandType[message.commandId];
       const result_msg = message.type === 1 ? true : false;
 
+      // ARCHIVE ENC_EEC : la station renvoie le gTS (10 chiffres) dans le message
+      // CMD_DOWNLOAD_VIDEO ; on le mémorise pour dériver la clé des keyframes.
+      if (this.archiveEncEecMode && message.commandId === CommandType.CMD_DOWNLOAD_VIDEO) {
+        const gts = extractArchiveGTS(message.data);
+        if (gts) {
+          this.archiveGTS = gts;
+          rootP2PLogger.debug(`Handle DATA - ARCHIVE ENC_EEC gTS reçu`, {
+            stationSN: this.rawStation.station_sn,
+            gTS: gts,
+          });
+        }
+      }
+
       if (result_msg) {
         let return_code = 0;
         let resultData: Buffer | undefined;
@@ -2252,7 +2270,30 @@ export class P2PClientProtocol extends TypedEmitter<P2PClientProtocolEvents> {
           videoMetaData.videoTimestamp = message.data.subarray(14, 20).readUIntLE(0, 6);
 
           let payloadStart = 22;
-          if (message.signCode > 0 && data_length >= 128) {
+          if (this.archiveEncEecMode) {
+            // ARCHIVE ENC_EEC : clé dérivée localement (SN+DID+gTS), 0 secret.
+            // Seules les keyframes sont chiffrées (AES-128-ECB, 128 premiers o @22) ;
+            // les P-frames sont en clair -> aesKey reste "" (bropat les laisse telles quelles).
+            if (isKeyFrame && this.archiveGTS && data_length >= 128) {
+              const res = deriveArchiveKeyCalibrated(
+                this.rawStation.station_sn,
+                this.rawStation.p2p_did,
+                this.archiveGTS,
+                message.data.subarray(22, 150),
+                this.archivePpcsSuffix
+              );
+              if (res) {
+                this.archivePpcsSuffix = res.ppcsSuffix; // cache (constante/device)
+                videoMetaData.aesKey = Buffer.from(res.keyData, "ascii").toString("hex");
+              } else {
+                rootP2PLogger.warn(`ARCHIVE ENC_EEC : key_data non dérivable (gTS/DID/suffix)`, {
+                  stationSN: this.rawStation.station_sn,
+                  gTS: this.archiveGTS,
+                });
+              }
+            }
+            // payloadStart reste 22 ; pas de bloc de clé RSA sur ce chemin.
+          } else if (message.signCode > 0 && data_length >= 128) {
             const key = message.data.subarray(22, 150);
             const rsaKey = this.currentMessageState[message.dataType].rsaKey;
             if (rsaKey) {
@@ -4317,6 +4358,16 @@ export class P2PClientProtocol extends TypedEmitter<P2PClientProtocolEvents> {
         stationSN: this.rawStation.station_sn,
       });
     }
+  }
+
+  /**
+   * Active le mode ARCHIVE ENC_EEC pour le prochain download : la clé des keyframes
+   * est dérivée localement (SN+DID+gTS) au lieu d'un cipher RSA cloud. À appeler par
+   * startDownload quand la station est "mega" et qu'aucun cipher cloud n'est disponible.
+   */
+  public setArchiveEncEecMode(enabled: boolean): void {
+    this.archiveEncEecMode = enabled;
+    this.archiveGTS = null; // nouveau download -> nouveau gTS attendu
   }
 
   public getDownloadRSAPrivateKey(): NodeRSA {
